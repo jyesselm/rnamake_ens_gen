@@ -10,14 +10,13 @@ from rnamake_ens_gen import logger, wrapper
 log = logger.get_logger("score")
 
 
-
 @dataclass(frozen=True, order=True)
 class Opts:
     wrapper_opts: wrapper.Opts = wrapper.Opts()
     output_num: int = 0
     runs: int = 1
-    threads : int = 1
-    build_files_path : str = ""
+    threads: int = 1
+    build_files_path: str = ""
 
 
 def write_ensemble_file(pdbs, output_num):
@@ -31,13 +30,27 @@ def write_ensemble_file(pdbs, output_num):
 def score(df, wrapper, opts):
     scores = []
     for i, row in df.iterrows():
-        seq = row['sequence'][8:-8]
+        seq = row["sequence"][8:-8]
         build_file = f"{opts.build_files_path}/{row['topology']}.csv"
-        ens_file = os.path.abspath("ires.0.csv")
-        score = wrapper.run(seq, build_file, ens_file, opts.wrapper_opts)
-        scores.append(score)
+        ens_file = os.path.abspath(f"ires.{opts.output_num}.csv")
+        avg = 0
+        for i in range(opts.runs):
+            avg += wrapper.run(seq, build_file, ens_file, opts.wrapper_opts)
+        scores.append(avg / opts.runs + 1)
     return scores
 
+
+def score_single(df, wrapper, opts):
+    scores = np.zeros(len(df))
+    row = df.iloc[0]
+    seq = row["sequence"][8:-8]
+    build_file = f"{opts.build_files_path}/{row['topology']}.csv"
+    ens_file = os.path.abspath(f"ires.{opts.output_num}.csv")
+    avg = 0
+    for i in range(opts.runs):
+        avg += wrapper.run(seq, build_file, ens_file, opts.wrapper_opts)
+    scores[0] = avg / opts.runs + 1
+    return scores
 
 
 class Scorer(object):
@@ -56,6 +69,9 @@ class Scorer(object):
 
     def score(self, pdbs):
         write_ensemble_file(pdbs, self.opts.output_num)
+        init_scores = score_single(self.construct_df, self.wrapper, self.opts)
+        if init_scores[0] < 500:
+            return init_scores
         if self.opts.threads == 1:
             scores = score(self.construct_df, self.wrapper, self.opts)
         else:
@@ -68,4 +84,4 @@ class Scorer(object):
                 scores.extend(score_a)
         return scores
 
-        #print(scores)
+        # print(scores)

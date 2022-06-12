@@ -40,6 +40,10 @@ class BuildMotifGraphWrapper(object):
             cmd += f"--steps {opts.steps} "
         if opts.sterics:
             cmd += "--sterics "
-        output = subprocess.check_output(cmd, shell=True).decode("utf8")
-        lines = output.split("\n")
-        return int(lines[-2])
+        try:
+            output = subprocess.check_output(cmd, shell=True).decode("utf8")
+            lines = output.split("\n")
+            return int(lines[-2])
+        except:
+            return -1
+

@@ -19,15 +19,15 @@ class Opts:
     build_files_path: str = ""
 
 
-def write_ensemble_file(pdbs, output_num):
+def write_ensemble_file(ens_mems, output_num):
     f = open(f"ires.{output_num}.csv", "w")
     f.write("path,end_0,end_1,end_2\n")
-    for pdb in pdbs:
-        f.write(f"{pdb},A2-B14,A8-B13,\n")
+    for ens_mem in ens_mems:
+        f.write(f"{ens_mem.path},{ens_mem.end_1},{ens_mem.end_2},\n")
     f.close()
 
 
-def score(df, wrapper, opts):
+def simulate(df, wrapper, opts):
     scores = []
     for i, row in df.iterrows():
         seq = row["sequence"][8:-8]
@@ -35,12 +35,17 @@ def score(df, wrapper, opts):
         ens_file = os.path.abspath(f"ires.{opts.output_num}.csv")
         avg = 0
         for i in range(opts.runs):
-            avg += wrapper.run(seq, build_file, ens_file, opts.wrapper_opts)
+            score = wrapper.run(seq, build_file, ens_file, opts.wrapper_opts)
+            if score == -1:
+                log.warn('wrapper returned an error!')
+                return np.zeros(len(df))
+            avg += score
+
         scores.append(avg / opts.runs + 1)
     return scores
 
 
-def score_single(df, wrapper, opts):
+def simulate_single(df, wrapper, opts):
     scores = np.zeros(len(df))
     row = df.iloc[0]
     seq = row["sequence"][8:-8]
@@ -48,12 +53,16 @@ def score_single(df, wrapper, opts):
     ens_file = os.path.abspath(f"ires.{opts.output_num}.csv")
     avg = 0
     for i in range(opts.runs):
-        avg += wrapper.run(seq, build_file, ens_file, opts.wrapper_opts)
+        score = wrapper.run(seq, build_file, ens_file, opts.wrapper_opts)
+        if score == -1:
+            log.warn('wrapper returned an error!')
+            return np.zeros(len(df))
+        avg += score
     scores[0] = avg / opts.runs + 1
     return scores
 
 
-class Scorer(object):
+class Simulater(object):
     def __init__(self, construct_df, opts: Opts):
         self.opts = opts
         self.construct_df = construct_df
@@ -67,18 +76,18 @@ class Scorer(object):
         self.wrapper.setup()
         self.p = Pool(processes=self.opts.threads)
 
-    def score(self, pdbs):
-        write_ensemble_file(pdbs, self.opts.output_num)
-        init_scores = score_single(self.construct_df, self.wrapper, self.opts)
-        if init_scores[0] < 500:
-            return init_scores
+    def score(self, ens_members):
+        write_ensemble_file(ens_members, self.opts.output_num)
+        #init_scores = simulate_single(self.construct_df, self.wrapper, self.opts)
+        #if init_scores[0] < 200:
+        #    return init_scores
         if self.opts.threads == 1:
-            scores = score(self.construct_df, self.wrapper, self.opts)
+            scores = simulate(self.construct_df, self.wrapper, self.opts)
         else:
             wrappers = [self.wrapper for _ in range(self.opts.threads)]
             opts = [self.opts for _ in range(self.opts.threads)]
             dfs = np.array_split(self.construct_df, self.opts.threads)
-            score_arrays = self.p.starmap(score, zip(dfs, wrappers, opts))
+            score_arrays = self.p.starmap(simulate, zip(dfs, wrappers, opts))
             scores = []
             for score_a in score_arrays:
                 scores.extend(score_a)

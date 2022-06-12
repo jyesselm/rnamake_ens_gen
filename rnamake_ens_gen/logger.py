@@ -9,7 +9,7 @@ def setup_applevel_logger(logger_name=APP_LOGGER_NAME, is_debug=False, file_name
     logger.setLevel(logging.DEBUG if is_debug else logging.INFO)
 
     formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+            "%(name)s - %(levelname)s - %(message)s"
     )
 
     sh = logging.StreamHandler(sys.stdout)
